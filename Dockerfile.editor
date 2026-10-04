@@ -1,0 +1,48 @@
+# Base image: build toolchain, pinned Godot + voxel sources and the Linux mono editor with GodotSharp.
+# Dockerfile.platforms builds the templates and other platforms on top of it; CI can use it to export projects.
+FROM ubuntu:24.04 AS editor
+
+ARG GODOT_TAG
+ARG VOXEL_COMMIT
+ARG JOBS=
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1 \
+    GODOT_SRC=/opt/godot-src \
+    SCONS_FLAGS="arch=x86_64 module_mono_enabled=yes production=yes lto=none"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential scons pkg-config git python3 ca-certificates \
+    libx11-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libglu1-mesa-dev \
+    libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev \
+    libwayland-dev libwayland-bin \
+    mingw-w64 dotnet-sdk-8.0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix \
+    && update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+
+RUN : "${GODOT_TAG:?build-arg GODOT_TAG is required}" "${VOXEL_COMMIT:?build-arg VOXEL_COMMIT is required}" \
+    && git clone -q --depth 1 --branch "$GODOT_TAG" https://github.com/godotengine/godot.git "$GODOT_SRC" \
+    && git init -q "$GODOT_SRC/modules/voxel" \
+    && git -C "$GODOT_SRC/modules/voxel" fetch -q --depth 1 https://github.com/Zylann/godot_voxel.git "$VOXEL_COMMIT" \
+    && git -C "$GODOT_SRC/modules/voxel" checkout -q --detach FETCH_HEAD
+
+WORKDIR /opt/godot-src
+
+# Object files are dropped to keep the image small; generated sources and the mono glue stay for the other targets.
+RUN scons -j"${JOBS:-$(nproc)}" platform=linuxbsd target=editor $SCONS_FLAGS \
+    && find . \( -name '*.o' -o -name '*.a' \) -delete
+
+RUN bin/godot.linuxbsd.editor.x86_64.mono --headless --generate-mono-glue modules/mono/glue \
+    && python3 modules/mono/build_scripts/build_assemblies.py --godot-output-dir=bin --godot-platform=linuxbsd
+
+RUN mkdir -p /opt/godot \
+    && cp bin/godot.linuxbsd.editor.x86_64.mono /opt/godot/ \
+    && cp -r bin/GodotSharp /opt/godot/ \
+    && ln -s /opt/godot/godot.linuxbsd.editor.x86_64.mono /usr/local/bin/godot
+
+WORKDIR /work
+
+FROM scratch AS artifacts
+COPY --from=editor /opt/godot/ /

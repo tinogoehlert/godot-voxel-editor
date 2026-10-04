@@ -1,0 +1,28 @@
+# Templates and Windows editor, built on top of the editor image from Dockerfile.editor.
+# Each output stage (linux-templates, windows-templates, windows-editor) holds only the binaries.
+ARG EDITOR_IMAGE=godot-voxel-editor
+FROM ${EDITOR_IMAGE} AS base
+
+ARG JOBS=
+ENV JOBS=${JOBS}
+WORKDIR /opt/godot-src
+
+FROM base AS linux-templates-build
+RUN scons -j"${JOBS:-$(nproc)}" platform=linuxbsd target=template_release $SCONS_FLAGS
+RUN scons -j"${JOBS:-$(nproc)}" platform=linuxbsd target=template_debug $SCONS_FLAGS
+
+FROM scratch AS linux-templates
+COPY --from=linux-templates-build /opt/godot-src/bin/godot.linuxbsd.template_*.x86_64.mono* /
+
+FROM base AS windows-templates-build
+RUN scons -j"${JOBS:-$(nproc)}" platform=windows target=template_release $SCONS_FLAGS use_mingw=yes d3d12=no angle=no
+RUN scons -j"${JOBS:-$(nproc)}" platform=windows target=template_debug $SCONS_FLAGS use_mingw=yes d3d12=no angle=no
+
+FROM scratch AS windows-templates
+COPY --from=windows-templates-build /opt/godot-src/bin/godot.windows.template_*.x86_64.mono* /
+
+FROM base AS windows-editor-build
+RUN scons -j"${JOBS:-$(nproc)}" platform=windows target=editor $SCONS_FLAGS use_mingw=yes d3d12=no angle=no
+
+FROM scratch AS windows-editor
+COPY --from=windows-editor-build /opt/godot-src/bin/godot.windows.editor.x86_64.mono* /
