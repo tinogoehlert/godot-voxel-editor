@@ -23,7 +23,7 @@ The tag is the `GODOT_TAG` from `engine.env`. The image is built by the `editor-
 
 ## Releases
 
-The `release` workflow (manual trigger) builds on top of the prebuilt image and publishes a GitHub release tagged `<GODOT_TAG>-voxel-<short commit>`. It contains one zip each for `linux-editor`, `linux-templates`, `windows-editor` and `windows-templates`. Run `editor-image` first.
+The `release` workflow (manual trigger) builds on top of the prebuilt image and publishes a GitHub release tagged `<GODOT_TAG>-voxel-<short commit>`. It contains one zip each for `linux-editor`, `linux-templates`, `windows-editor` and `windows-templates`. Run `editor-image` first. Both workflows can run on your own machine, see [docs/self-hosted-runner.md](docs/self-hosted-runner.md).
 
 ## Local build
 
