@@ -16,10 +16,14 @@ The versions are pinned in [engine.env](engine.env).
 ## Prebuilt image
 
 ```sh
-docker pull ghcr.io/bumpy-snailfish/godot-voxel-editor:4.7.2-stable
+docker pull ghcr.io/tinogoehlert/godot-voxel-editor:4.7.2-stable
 ```
 
 The tag is the `GODOT_TAG` from `engine.env`. The image is built by the `editor-image` workflow (manual trigger).
+
+## Releases
+
+The `release` workflow (manual trigger) builds on top of the prebuilt image and publishes a GitHub release tagged `<GODOT_TAG>-voxel-<short commit>`. It contains one zip each for `linux-editor`, `linux-templates`, `windows-editor` and `windows-templates`. Run `editor-image` first.
 
 ## Local build
 
@@ -35,7 +39,7 @@ Requires Docker. The build runs as `linux/amd64`, so it is slow under emulation 
 | `editor` | Linux editor and `GodotSharp` |
 | `linux-templates` | Linux release and debug templates |
 | `windows-templates` | Windows release and debug templates |
-| `windows-editor` | Windows editor |
+| `windows-editor` | Windows editor and `GodotSharp` |
 | `templates` | `linux-templates` and `windows-templates` (default) |
 | `all` | Everything above |
 

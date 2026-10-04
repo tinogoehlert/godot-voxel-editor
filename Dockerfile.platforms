@@ -26,3 +26,4 @@ RUN scons -j"${JOBS:-$(nproc)}" platform=windows target=editor $SCONS_FLAGS use_
 
 FROM scratch AS windows-editor
 COPY --from=windows-editor-build /opt/godot-src/bin/godot.windows.editor.x86_64.mono* /
+COPY --from=base /opt/godot/GodotSharp /GodotSharp

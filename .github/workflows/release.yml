@@ -1,0 +1,73 @@
+name: release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/godot-voxel-editor
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          [linux-editor, linux-templates, windows-editor, windows-templates]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Load engine.env
+        run: cat engine.env >> "$GITHUB_ENV"
+      - name: Set image name
+        run: echo "EDITOR_IMAGE=${IMAGE,,}:$GODOT_TAG" >> "$GITHUB_ENV"
+      - name: Build
+        run: |
+          mkdir out
+          if [ "${{ matrix.target }}" = linux-editor ]; then
+            docker pull "$EDITOR_IMAGE"
+            id=$(docker create "$EDITOR_IMAGE")
+            docker cp "$id:/opt/godot/." out/
+            docker rm "$id"
+          else
+            docker build -f Dockerfile.platforms --target "${{ matrix.target }}" \
+              --build-arg EDITOR_IMAGE="$EDITOR_IMAGE" \
+              --output type=local,dest=out .
+          fi
+      - name: Zip
+        run: |
+          name="godot-voxel-${GODOT_TAG}-${{ matrix.target }}"
+          (cd out && zip -r "../$name.zip" .)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: godot-voxel-*.zip
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load engine.env
+        run: cat engine.env >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GODOT_TAG}-voxel-${VOXEL_COMMIT:0:7}"
+          gh release create "$tag" dist/*.zip \
+            --target "$GITHUB_SHA" \
+            --title "Godot $GODOT_TAG with voxel ${VOXEL_COMMIT:0:7}" \
+            --notes "Godot $GODOT_TAG (mono) with [godot_voxel](https://github.com/Zylann/godot_voxel/commit/$VOXEL_COMMIT)."
