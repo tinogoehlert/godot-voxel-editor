@@ -23,7 +23,7 @@ The tag is the `GODOT_TAG` from `engine.env`. The image is built by the `editor-
 
 ## Releases
 
-The `release` workflow (manual trigger) builds on top of the prebuilt image and publishes a GitHub release tagged `<GODOT_TAG>-voxel-<short commit>`. It contains one zip each for `linux-editor`, `linux-templates`, `windows-editor` and `windows-templates`. Run `editor-image` first. Both workflows can run on your own machine, see [docs/self-hosted-runner.md](docs/self-hosted-runner.md).
+The `release` workflow (manual trigger) builds on top of the prebuilt image and publishes a GitHub release tagged `<GODOT_TAG>-voxel-<short commit>`. It contains one zip each for `linux-editor`, `linux-templates`, `windows-editor` and `windows-templates`, plus the macOS zips below. Run `editor-image` first. Both workflows can run on your own machine, see [docs/self-hosted-runner.md](docs/self-hosted-runner.md).
 
 ## Local build
 
@@ -67,4 +67,9 @@ Change `GODOT_TAG` or `VOXEL_COMMIT` in `engine.env`, then run the `editor-image
 
 ## macOS
 
-Not built here. Build it manually.
+Not built in Docker, the Apple SDK cannot be redistributed. The `release` workflow builds it natively on a GitHub-hosted `macos-latest` runner without the base image and adds two zips:
+
+- `macos-editor`: arm64 editor app with `GodotSharp`
+- `macos-templates`: universal (arm64 and x86_64) `macos_template.app` with release and debug
+
+The app is not signed. After downloading, remove the quarantine flag with `xattr -dr com.apple.quarantine <app>`.

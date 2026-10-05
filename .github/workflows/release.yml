@@ -58,8 +58,73 @@ jobs:
           path: godot-voxel-*.zip
           if-no-files-found: error
 
+  build-macos:
+    runs-on: macos-latest
+    env:
+      SCONS_FLAGS: module_mono_enabled=yes production=yes lto=none
+    steps:
+      - uses: actions/checkout@v7
+      - name: Load engine.env
+        run: cat engine.env >> "$GITHUB_ENV"
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+      - name: Install scons
+        run: brew install scons
+      - name: Get sources
+        run: |
+          git clone -q --depth 1 --branch "$GODOT_TAG" https://github.com/godotengine/godot.git godot-engine
+          git init -q godot-engine/modules/voxel
+          git -C godot-engine/modules/voxel fetch -q --depth 1 https://github.com/Zylann/godot_voxel.git "$VOXEL_COMMIT"
+          git -C godot-engine/modules/voxel checkout -q --detach FETCH_HEAD
+      - name: Install Vulkan SDK
+        working-directory: godot-engine
+        run: misc/scripts/install_vulkan_sdk_macos.sh
+      - name: Build editor
+        working-directory: godot-engine
+        run: scons platform=macos arch=arm64 target=editor $SCONS_FLAGS
+      - name: Build C# assemblies
+        working-directory: godot-engine
+        run: |
+          bin/godot.macos.editor.arm64.mono --headless --generate-mono-glue modules/mono/glue
+          python3 modules/mono/build_scripts/build_assemblies.py --godot-output-dir=bin --godot-platform=macos
+      - name: Pack editor app
+        working-directory: godot-engine
+        run: scons platform=macos arch=arm64 target=editor generate_bundle=yes $SCONS_FLAGS
+      - name: Zip editor
+        working-directory: godot-engine/bin
+        run: ditto -c -k --keepParent *.app "$GITHUB_WORKSPACE/godot-voxel-${GODOT_TAG}-macos-editor.zip"
+      - name: Build templates
+        working-directory: godot-engine
+        run: |
+          for target in template_release template_debug; do
+            for arch in arm64 x86_64; do
+              scons platform=macos target=$target arch=$arch $SCONS_FLAGS
+            done
+            lipo -create \
+              bin/godot.macos.$target.arm64.mono \
+              bin/godot.macos.$target.x86_64.mono \
+              -output bin/godot.macos.$target.universal.mono
+          done
+      - name: Pack template app
+        working-directory: godot-engine
+        run: |
+          cp -r misc/dist/macos_template.app bin/
+          mkdir -p bin/macos_template.app/Contents/MacOS
+          cp bin/godot.macos.template_release.universal.mono bin/macos_template.app/Contents/MacOS/godot_macos_release.universal
+          cp bin/godot.macos.template_debug.universal.mono bin/macos_template.app/Contents/MacOS/godot_macos_debug.universal
+          chmod +x bin/macos_template.app/Contents/MacOS/*
+      - name: Zip templates
+        working-directory: godot-engine/bin
+        run: zip -q -9 -r "$GITHUB_WORKSPACE/godot-voxel-${GODOT_TAG}-macos-templates.zip" macos_template.app
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: godot-voxel-*.zip
+          if-no-files-found: error
+
   release:
-    needs: build
+    needs: [build, build-macos]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
